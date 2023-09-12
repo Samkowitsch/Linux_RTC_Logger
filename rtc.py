@@ -8,8 +8,9 @@ import sched
 import csv
 
 csvFile = "time.csv"
-csvHeader = ["NTP" , "RTC" , "SYS"]
+csvHeader = ["Date" , "NTP" , "RTC" , "SYS"]
 
+rtcName = "ukn"
 
 def RequestTimefromNtp(addr='0.de.pool.ntp.org'):
 	REF_TIME_1970 = 2208988800  # Reference time
@@ -18,12 +19,12 @@ def RequestTimefromNtp(addr='0.de.pool.ntp.org'):
 	client.sendto(data, (addr, 123))
 	data, address = client.recvfrom(1024)
 	if data:
-        	t = struct.unpack('!12I', data)[10]
-        	t -= REF_TIME_1970
+        t = struct.unpack('!12I', data)[10]
+		t -= REF_TIME_1970
 	
 	ct = time.ctime(t)
 	forTime = datetime.datetime.strptime(ct , '%a %b %d %H:%M:%S %Y')
-	return forTime.strftime('%H:%M:%S')
+	return forTime.strftime('%d.%m.%Y') , forTime.strftime('%H:%M:%S')
 
 
 def getHwclock():
@@ -44,18 +45,19 @@ def getTimeStamps(timeScheduler):
 	timeScheduler.enter(60 , 1 , getTimeStamps , (timeScheduler ,))
 	print("Get Timestamp from NTP , RTC and System")
 	start = time.time()
-	ntpTime = RequestTimefromNtp()
+	ntpDate , ntpTime = RequestTimefromNtp()
 	rtcTime = getHwclock()
 	sysTime = getSystemTime()
 	end = time.time()
-	print("NTP : " , ntpTime , " RTC : " , rtcTime , " SYS : " , sysTime , " Runtime : " , end - start)
+	print("Date : " , ntpDate , " NTP : " , ntpTime , " RTC : " , rtcTime , " SYS : " , sysTime , " Runtime : " , end - start)
 
-	data = [ntpTime , rtcTime , sysTime]
+	data = [ntpDate , ntpTime , rtcTime , sysTime]
 	
 	if not (os.path.isfile(csvFile)):
 		print("Create new file with header")
 		with open(csvFile , 'w') as f:
 			writer = csv.writer(f)
+			csvHeader[2] += ' (' + rtcName + ')'
 			writer.writerow(csvHeader)
  
 
@@ -65,7 +67,11 @@ def getTimeStamps(timeScheduler):
 
 
 if __name__ == "__main__":
-	print("RTC Test script")
+	with open('/sys/class/rtc/rtc0/name' , 'r') as f:
+		line = f.read()
+		rtcName = line.split()[0]
+
+	print("RTC " , rtcName  , " Test script")
 	timeScheduler = sched.scheduler(time.time , time.sleep)
 	timeScheduler.enter(0 , 1 , getTimeStamps , (timeScheduler,))
 	timeScheduler.run() 
